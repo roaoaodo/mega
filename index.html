@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Browser · Black Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 20px;
+        }
+
+        /* фиксированная шапка с поиском */
+        .search-wrapper {
+            position: sticky;
+            top: 0;
+            background: #000000;
+            padding: 12px 0 20px 0;
+            z-index: 100;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.8);
+            border-bottom: 1px solid #2a2a2a;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-weight: 400;
+            font-size: 2.4rem;
+            letter-spacing: -0.5px;
+            margin-bottom: 20px;
+            color: #ffffff;
+            border-left: 5px solid #3b82f6;
+            padding-left: 18px;
+        }
+
+        #searchInput {
+            width: 100%;
+            max-width: 700px;
+            background: #0f0f0f;
+            border: 1.5px solid #2e2e2e;
+            border-radius: 60px;
+            padding: 16px 24px;
+            font-size: 1.2rem;
+            color: #ffffff;
+            outline: none;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #searchInput:focus {
+            border-color: #3b82f6;
+            background: #151515;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        #searchInput::placeholder {
+            color: #7a7a7a;
+            font-weight: 300;
+            opacity: 0.7;
+        }
+
+        /* статусная строка */
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin: 16px 0 12px 0;
+            color: #a0a0a0;
+            font-size: 0.95rem;
+            border-bottom: 1px dashed #2a2a2a;
+            padding-bottom: 10px;
+        }
+
+        #fileCount {
+            color: #bbbbbb;
+            font-weight: 500;
+        }
+
+        #repoInfo {
+            color: #6b7280;
+        }
+
+        /* сетка файлов */
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .file-card {
+            background: #0c0c0c;
+            border: 1px solid #222222;
+            border-radius: 18px;
+            padding: 18px 18px 14px 18px;
+            transition: transform 0.1s, border-color 0.2s, background 0.2s;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.6);
+        }
+
+        .file-card:hover {
+            background: #131313;
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+        }
+
+        .file-icon {
+            font-size: 2.4rem;
+            margin-bottom: 8px;
+        }
+
+        .file-name {
+            font-size: 1.1rem;
+            font-weight: 500;
+            word-break: break-word;
+            color: #f0f0f0;
+            margin-bottom: 6px;
+        }
+
+        .file-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 0.8rem;
+            color: #8f8f8f;
+            margin-top: 8px;
+            border-top: 1px solid #252525;
+            padding-top: 10px;
+        }
+
+        .file-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .file-size {
+            background: #1e1e1e;
+            padding: 2px 10px;
+            border-radius: 40px;
+            font-family: monospace;
+        }
+
+        .empty-message {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 70px 20px;
+            background: #070707;
+            border-radius: 40px;
+            color: #aaaaaa;
+            font-size: 1.3rem;
+            border: 1px dashed #333;
+        }
+
+        .footer-note {
+            margin-top: 40px;
+            text-align: right;
+            font-size: 0.8rem;
+            color: #3f3f3f;
+        }
+
+        /* спиннер загрузки */
+        .loader {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: center;
+            padding: 60px;
+        }
+
+        .loader div {
+            width: 14px;
+            height: 14px;
+            margin: 0 6px;
+            background: #3b82f6;
+            border-radius: 50%;
+            animation: pulse 1.2s infinite ease-in-out;
+        }
+
+        .loader div:nth-child(2) { animation-delay: 0.2s; }
+        .loader div:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes pulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1); }
+        }
+
+        /* адаптив */
+        @media (max-width: 600px) {
+            body { padding: 16px 12px; }
+            h1 { font-size: 1.8rem; }
+            #searchInput { padding: 14px 18px; font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="search-wrapper">
+    <h1>⚫ REPO·SEARCH</h1>
+    <input type="text" id="searchInput" placeholder="Поиск файлов в реальном времени..." autocomplete="off" autofocus>
+</div>
+
+<div class="status-bar">
+    <span id="fileCount">Загрузка файлов...</span>
+    <span id="repoInfo">GitHub Pages · все файлы репозитория</span>
+</div>
+
+<!-- контейнер для карточек -->
+<div id="filesContainer" class="file-grid">
+    <div class="loader">
+        <div></div><div></div><div></div>
+    </div>
+</div>
+
+<div class="footer-note">
+    ⬤ black mode · live filter
+</div>
+
+<script>
+    (function() {
+        "use strict";
+
+        // ---------- НАСТРОЙКИ ----------
+        // Определяем имя пользователя и репозиторий из URL страницы (GitHub Pages)
+        // либо задаём вручную, если автоопределение не работает.
+        const getRepoInfo = () => {
+            const host = window.location.hostname;     // username.github.io
+            const path = window.location.pathname;     // /repo-name/ или /
+
+            let owner = '';
+            let repo = '';
+
+            // Паттерн: username.github.io/repoName
+            if (host.includes('github.io')) {
+                owner = host.split('.')[0];            // например "myusername"
+                const parts = path.split('/').filter(p => p.length > 0);
+                repo = parts.length > 0 ? parts[0] : ''; 
+            } else {
+                // Если запускаем локально или на другом домене — запасной вариант
+                console.warn('Не GitHub Pages домен. Используем значения по умолчанию.');
+                owner = 'octocat';      // замените на свои
+                repo = 'Spoon-Knife';   // тестовый репо
+            }
+
+            return { owner, repo };
+        };
+
+        const { owner, repo } = getRepoInfo();
+
+        // API GitHub для содержимого корня репозитория
+        const API_URL = `https://api.github.com/repos/${owner}/${repo}/contents`;
+        
+        // Для отображения в статус-баре
+        const repoInfoSpan = document.getElementById('repoInfo');
+        repoInfoSpan.textContent = `${owner}/${repo} · все файлы`;
+
+        // DOM элементы
+        const container = document.getElementById('filesContainer');
+        const searchInput = document.getElementById('searchInput');
+        const fileCountSpan = document.getElementById('fileCount');
+
+        // Хранилище всех загруженных файлов
+        let allFiles = [];
+        // флаг загрузки
+        let isLoading = false;
+
+        // ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
+        function formatFileSize(bytes) {
+            if (bytes === undefined || bytes === null) return '—';
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Определяем иконку по расширению / типу
+        function getFileIcon(fileName, type) {
+            if (type === 'dir') return '📁';
+            const ext = fileName.split('.').pop().toLowerCase();
+            const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'];
+            const docExts = ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'xls', 'xlsx', 'ppt', 'pptx'];
+            const codeExts = ['js', 'ts', 'jsx', 'tsx', 'html', 'css', 'scss', 'json', 'xml', 'yaml', 'yml', 'py', 'java', 'c', 'cpp', 'cs', 'go', 'rb', 'php', 'swift', 'kt', 'rs'];
+            const archiveExts = ['zip', 'tar', 'gz', 'rar', '7z', 'bz2'];
+            const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'm4a'];
+            const videoExts = ['mp4', 'avi', 'mov', 'mkv', 'webm'];
+
+            if (imageExts.includes(ext)) return '🖼️';
+            if (docExts.includes(ext)) return '📄';
+            if (codeExts.includes(ext)) return '🧑‍💻';
+            if (archiveExts.includes(ext)) return '🗜️';
+            if (audioExts.includes(ext)) return '🎵';
+            if (videoExts.includes(ext)) return '🎬';
+            if (fileName.startsWith('.')) return '⚙️';
+            return '📦';
+        }
+
+        // Создание DOM-карточки
+        function createFileCard(file) {
+            const card = document.createElement('div');
+            card.className = 'file-card';
+
+            const link = document.createElement('a');
+            link.href = file.html_url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'file-link';
+
+            const iconSpan = document.createElement('div');
+            iconSpan.className = 'file-icon';
+            iconSpan.textContent = getFileIcon(file.name, file.type);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'file-name';
+            nameDiv.textContent = file.name;
+
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'file-meta';
+
+            const typeSpan = document.createElement('span');
+            typeSpan.textContent = file.type === 'dir' ? 'папка' : 'файл';
+
+            const sizeSpan = document.createElement('span');
+            sizeSpan.className = 'file-size';
+            sizeSpan.textContent = file.type === 'dir' ? '—' : formatFileSize(file.size);
+
+            metaDiv.appendChild(typeSpan);
+            metaDiv.appendChild(sizeSpan);
+
+            link.appendChild(iconSpan);
+            link.appendChild(nameDiv);
+            link.appendChild(metaDiv);
+            card.appendChild(link);
+
+            // добавляем data-атрибуты для поиска (имя файла)
+            card.dataset.filename = file.name.toLowerCase();
+            return card;
+        }
+
+        // Рендер отфильтрованного списка
+        function renderFilteredFiles(searchTerm = '') {
+            const term = searchTerm.trim().toLowerCase();
+            
+            let filtered = allFiles;
+            if (term !== '') {
+                filtered = allFiles.filter(file => 
+                    file.name.toLowerCase().includes(term)
+                );
+            }
+
+            // Обновление счётчика
+            fileCountSpan.textContent = `Найдено: ${filtered.length} из ${allFiles.length}`;
+
+            // Очищаем контейнер
+            container.innerHTML = '';
+
+            if (filtered.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'empty-message';
+                emptyDiv.textContent = term ? 
+                    `🔍 Ничего не найдено по запросу «${term}»` : 
+                    '📭 В репозитории пока нет файлов';
+                container.appendChild(emptyDiv);
+                return;
+            }
+
+            // Сортируем: сначала папки, потом файлы, затем по имени
+            const sorted = [...filtered].sort((a, b) => {
+                if (a.type === b.type) {
+                    return a.name.localeCompare(b.name);
+                }
+                return a.type === 'dir' ? -1 : 1;
+            });
+
+            sorted.forEach(file => {
+                container.appendChild(createFileCard(file));
+            });
+        }
+
+        // Обработчик ввода (live search)
+        function onSearchInput(e) {
+            renderFilteredFiles(e.target.value);
+        }
+
+        // Загрузка файлов через GitHub API
+        async function loadFilesFromRepo() {
+            if (isLoading) return;
+            isLoading = true;
+            
+            // Показываем лоадер
+            container.innerHTML = `<div class="loader"><div></div><div></div><div></div></div>`;
+            fileCountSpan.textContent = 'Загрузка списка файлов...';
+
+            try {
+                const response = await fetch(API_URL);
+                
+                if (!response.ok) {
+                    let errorMsg = `Ошибка ${response.status}`;
+                    if (response.status === 403) errorMsg += ' (превышен лимит API, попробуйте позже)';
+                    if (response.status === 404) errorMsg += ' (репозиторий не найден или пуст)';
+                    throw new Error(errorMsg);
+                }
+
+                const data = await response.json();
+                
+                // Фильтруем только файлы и папки (исключаем submodule, symlink если есть)
+                const items = Array.isArray(data) ? data.filter(item => item.type === 'file' || item.type === 'dir') : [];
+                
+                allFiles = items.map(item => ({
+                    name: item.name,
+                    type: item.type,
+                    size: item.size,
+                    html_url: item.html_url,
+                    download_url: item.download_url,
+                    path: item.path
+                }));
+
+                // Обновляем отображение с текущим поисковым запросом
+                renderFilteredFiles(searchInput.value);
+                
+                // Если файлов нет
+                if (allFiles.length === 0) {
+                    fileCountSpan.textContent = 'Файлы не найдены в корне репозитория';
+                }
+
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                container.innerHTML = `
+                    <div class="empty-message">
+                        ⚠️ Не удалось загрузить файлы<br>
+                        <span style="font-size: 0.9rem; display: block; margin-top: 12px; color: #b91c1c;">
+                            ${error.message}<br>
+                            Проверьте, что репозиторий «${owner}/${repo}» существует и публичен.
+                        </span>
+                        <br>
+                        <small style="opacity:0.5">(или лимит запросов GitHub API — попробуйте позже)</small>
+                    </div>
+                `;
+                fileCountSpan.textContent = 'Ошибка загрузки';
+                allFiles = [];
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // Инициализация
+        function init() {
+            // Подписываемся на ввод
+            searchInput.addEventListener('input', onSearchInput);
+            
+            // Загружаем файлы (если repo не пустой)
+            if (owner && repo) {
+                loadFilesFromRepo();
+            } else {
+                container.innerHTML = `<div class="empty-message">❌ Не удалось определить репозиторий</div>`;
+                fileCountSpan.textContent = 'Ошибка конфигурации';
+            }
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
